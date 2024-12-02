@@ -1,0 +1,10 @@
+---
+title: "Homework 6"
+author: "Zeqi Li"
+date: "2024-12-02"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+library(tidyverse)
+```
