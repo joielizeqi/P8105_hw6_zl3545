@@ -113,4 +113,103 @@ est_df |>
 COMMENT
 
 # Problem 2
+## Import data from GitHub
+```{r p2_import, message = FALSE}
+url = "https://raw.githubusercontent.com/washingtonpost/data-homicides/master/homicide-data.csv"
+
+homicide = read_csv(url(url),
+                    na = c("", "Unknown"))
+```
+
+## Tidy up the `homicide` dataset
+```{r p2_tidy}
+homicide_tidy = homicide |> 
+  mutate(city_state = paste(city, 
+                            state, 
+                            sep = ", "),
+         resolved = as.numeric(disposition == "Closed by arrest"),
+         victim_age = as.numeric(victim_age),
+         victim_race = fct_relevel(victim_race, "White")) |> 
+  filter(!city_state %in% c("Dallas, TX", 
+                            "Phoenix, AZ", 
+                            "Kansas City, MO", 
+                            "Tulsa, AL"),
+         victim_race %in% c("White", "Black")) |> 
+  select(-city & -state)
+```
+
+## Fit a logistic regression for Baltimore data
+```{r p2_glm_balt}
+baltimore_df = homicide_tidy |> 
+  filter(city_state == "Baltimore, MD")
+
+baltimore_model = glm(resolved ~ victim_age + victim_sex + victim_race,
+                      family = binomial(link = "logit"),
+                      data = baltimore_df)
+```
+
+## Compute the adjusted odds ratio between sexes
+``` {r p2_or}
+baltimore_sum = baltimore_model |> 
+  broom::tidy(conf.int = TRUE) |> 
+  filter(term == "victim_sexMale") |> 
+  mutate(estimate = exp(estimate),
+         conf.low = exp(conf.low),
+         conf.high = exp(conf.high)) |> 
+  select(estimate, 
+         conf.low,
+         conf.high)
+
+baltimore_sum |> 
+  knitr::kable(digits = 3,
+               caption = "Adjusted odds ratio and 95% confidence intervals for solving homicides between male and female victims in Baltimore, MD",
+               col.names = c("Adjusted odds ratio",
+                             "Confidence interval lower limit",
+                             "Confidence interval upper limit"))
+```
+
+
+## Fit a logistic regression for all cities
+```{r p2_glm_all}
+all_model = homicide_tidy |> 
+  group_by(city_state) |> 
+  nest() |> 
+  mutate(model = map(data, ~glm(resolved ~ victim_age + victim_sex + victim_race, 
+                                family = binomial(link = "logit"), 
+                                data = .x)),
+         summary = map(model, ~broom::tidy(.x, 
+                                           conf.int = TRUE))) |> 
+  unnest(summary) |> 
+  filter(term == "victim_sexMale") |> 
+  mutate(estimate = exp(estimate),
+         conf.low = exp(conf.low),
+         conf.high = exp(conf.high)) |> 
+  select(city_state,
+         estimate,
+         conf.low,
+         conf.high)
+```
+
+## Plot adjusted odds ratios across all cities
+```{r p2_plot, message = FALSE}
+all_model |> 
+  arrange(estimate) |> 
+  ggplot(aes(x = reorder(city_state, estimate),
+             y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = conf.low,
+                    ymax = conf.high)) +
+  labs(title = "Adjusted odds ratios of solved homicides between sexes",
+       x = "City",
+       y = "Adjusted odds ratio") +
+  theme(axis.text.x = element_text(angle = 90,
+                                   vjust = 0.5,
+                                   hjust = 1))
+```
+
+COMMENT
+
+# Problem 3
+
+
 
