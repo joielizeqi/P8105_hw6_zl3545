@@ -212,7 +212,7 @@ COMMENT
 
 # Problem 3
 ## Import data
-```{r p3_data, messgae = FALSE}
+```{r p3_data, message = FALSE}
 bwt_df = read_csv("data/birthweight.csv") |> 
   janitor::clean_names() |> 
   mutate(babysex = case_match(babysex,
@@ -248,10 +248,15 @@ bwt_lm1 = lm(bwt ~ delwt + gaweeks + malform + smoken + wtgain,
 
 bwt_lm1 |> 
   broom::tidy() |> 
-  select(term, estimate, p.value)
+  select(term, estimate, p.value) |> 
+  knitr::kable(digits = 3,
+               capption = "Summary of proposed linear regression model",
+               col.names = c("Term",
+                             "Estimate",
+                             "P-value"))
 ```
 
-## Plot model residuals of my proposed model
+## Plot model residuals of the proposed model
 ```{r p3_resid_plot}
 bwt_df |> 
   add_residuals(bwt_lm1) |> 
@@ -277,7 +282,7 @@ cv_df = crossv_mc(bwt_df, 100) |>
 ```
 
 ### Build models
-```{r p3_model, eval = FALSE}
+```{r p3_model}
 cv_df = cv_df |> 
   mutate(lm1 = map(train, 
                    \(df) lm(bwt ~ delwt + gaweeks + malform + smoken + wtgain,
