@@ -7,6 +7,7 @@ output: github_document
 
 ```{r setup, include = FALSE}
 library(tidyverse)
+library(modelr)
 ```
 
 # Problem 1
@@ -210,6 +211,117 @@ all_model |>
 COMMENT
 
 # Problem 3
+## Import data
+```{r p3_data, messgae = FALSE}
+bwt_df = read_csv("data/birthweight.csv") |> 
+  janitor::clean_names() |> 
+  mutate(babysex = case_match(babysex,
+                              1 ~ "male",
+                              2 ~ "female"),
+         babysex = fct_infreq(babysex),
+         frace = case_match(frace,
+                            1 ~ "white",
+                            2 ~ "black",
+                            3 ~ "asian",
+                            4 ~ "puerto rican",
+                            8 ~ "other",
+                            9 ~ NA),
+         frace = fct_infreq(frace),
+         mrace = case_match(mrace,
+                            1 ~ "white",
+                            2 ~ "black",
+                            3 ~ "asian",
+                            4 ~ "puerto rican",
+                            8 ~ "other"),
+         mrace = fct_infreq(mrace),
+         malform = case_match(malform,
+                              0 ~ "absent",
+                              1 ~ "present"),
+         malform = fct_infreq(malform))
+```
 
+## Building a model for birthweight
+Based on prior knowledge about physiological factors that would influence infants' birth weight, I decided to fit.a multiple linear regression, using `bwt` as response and `delwt`, `gaweeks`, `malform`, `smoken`, and `wtgain` as the predictors. I hypothesize that `delwt`, `gaweeks`, and `wtgain` would positively influence `bwt`, while `malform` and `smoken` would negatively inflience `bwt`.
+```{r p3_model1}
+bwt_lm1 = lm(bwt ~ delwt + gaweeks + malform + smoken + wtgain,
+             data = bwt_df)
 
+bwt_lm1 |> 
+  broom::tidy() |> 
+  select(term, estimate, p.value)
+```
 
+## Plot model residuals of my proposed model
+```{r p3_resid_plot}
+bwt_df |> 
+  add_residuals(bwt_lm1) |> 
+  add_predictions(bwt_lm1) |> 
+  ggplot(aes(x = pred,
+             y = resid)) +
+  geom_point(alpha = 0.5) + 
+  geom_hline(yintercept = 0,
+             color = "blue",
+             linetype = "dashed") + 
+  labs(title = "Residual plot of proposed multiple linear regression model on birthweight",
+       x = "Prediction",
+       y = "Residual")
+```
+From the residual plot above, we can see that the points are roughly symmetrical around the `residual=0` line and randomly scattered without a particular pattern. Therefore, we can conclude that the proposed linear model is appropriate for predicting `bwt`.
+
+## Compare proposed model to other models
+### Split into training and testing datasets
+```{r p3_split}
+cv_df = crossv_mc(bwt_df, 100) |> 
+  mutate(train = map(train, as_tibble),
+         test = map(test, as_tibble))
+```
+
+### Build models
+```{r p3_model, eval = FALSE}
+cv_df = cv_df |> 
+  mutate(lm1 = map(train, 
+                   \(df) lm(bwt ~ delwt + gaweeks + malform + smoken + wtgain,
+                            data = df)),
+         lm2 = map(train, 
+                   \(df) lm(bwt ~ blength + gaweeks,
+                            data = df)),
+         lm3 = map(train, 
+                   \(df) lm(bwt ~ bhead*blength + bhead*babysex + blength*babysex + bhead*blength*babysex,
+                            data = df)))
+```
+
+### Compute prediction errors
+```{r p3_rmse}
+cv_df = cv_df |> 
+  mutate(rmse_lm1 = map2_dbl(lm1, 
+                             test,
+                             \(mod, df) rmse(model = mod,
+                                             data = df)),
+         rmse_lm2 = map2_dbl(lm2, 
+                             test,
+                             \(mod, df) rmse(model = mod,
+                                             data = df)),
+         rmse_lm3 = map2_dbl(lm3, 
+                             test,
+                             \(mod, df) rmse(model = mod,
+                                             data = df))) |> 
+  select(starts_with("rmse")) |> 
+  pivot_longer(everything(),
+               names_to = "model",
+               values_to = "rmse",
+               names_prefix = "rmse_") |> 
+  mutate(model = fct_inorder(model))
+```
+
+### Plot prediction errors
+```{r p3_rmse_plot}
+cv_df |> 
+  ggplot(aes(x = model,
+             y = rmse)) +
+  geom_violin() +
+  labs(title = "Violin plot of prediction error distributions for candidate models",
+       x = "Model",
+       y = "RMSE")
+```
+
+COMMENT
